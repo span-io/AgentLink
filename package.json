@@ -1,10 +1,19 @@
 {
-  "name": "remote-agent-client",
+  "name": "@span-io/AgentLink",
   "version": "0.0.1",
-  "private": true,
+  "description": "Secure bridge between remote agent orchestrators and local agent CLI tools.",
   "type": "module",
   "bin": {
-    "remote-agent-client": "dist/index.js"
+    "agent-link": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/span-io/AgentLink.git"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
