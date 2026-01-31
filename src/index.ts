@@ -202,7 +202,14 @@ function setupAgentPiping(agentId: string, proc: SpawnedProcess) {
 
 function parseArgs(argv: string[]): CliArgs {
   const parsed: CliArgs = { agentArgs: [] };
-  for (let i = 0; i < argv.length; i += 1) {
+  let startIdx = 0;
+  
+  // Handle optional "connect" subcommand
+  if (argv[0] === "connect") {
+    startIdx = 1;
+  }
+
+  for (let i = startIdx; i < argv.length; i += 1) {
     const arg = argv[i];
     switch (arg) {
       case "--server":
