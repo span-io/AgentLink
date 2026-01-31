@@ -22,14 +22,16 @@ In the Remote Agent Web UI, click **+ Connect New Device**. You will be given a 
 Run the following command in your terminal:
 
 ```bash
-npx -y remote-agent-client --server https://www.code-agent.online --pairing-code YOUR-PAIRING-CODE
+npx -y @span-io/agent-link connect --server https://your-server.com --pairing-code YOUR-PAIRING-CODE
 ```
+
+*Replace `https://your-server.com` with the URL of your orchestrator instance.*
 
 ### 2. Run in Background
 Once paired, the client will save your credentials to `~/.config/remote-agent/client.json`. You can subsequently run it without the pairing code:
 
 ```bash
-npx -y remote-agent-client --server https://www.code-agent.online
+npx -y @span-io/agent-link connect --server https://your-server.com
 ```
 
 ### 3. Agent Selection
@@ -38,7 +40,7 @@ You can force a specific binary using the `--agent` flag or environment variable
 
 ```bash
 # Force usage of a specific binary
-npx -y remote-agent-client --server ... --agent /usr/local/bin/my-custom-codex
+npx -y @span-io/agent-link connect --server ... --agent /usr/local/bin/my-custom-codex
 ```
 
 ## 🔒 Security & Risk Profile
@@ -53,7 +55,7 @@ npx -y remote-agent-client --server ... --agent /usr/local/bin/my-custom-codex
 ### What it Does NOT Protect Against
 *   **Compromised Server:** If your Remote Agent Orchestrator server is hacked, an attacker can send "spawn" commands to your connected client.
 *   **Malicious Agent Output:** If the AI agent (e.g., Gemini) decides to run `rm -rf /`, this client will faithfully execute that command.
-*   **Local Privilege Escalation:** The agent runs with the same permissions as the user who ran `npx remote-agent-client`. Do not run this as root.
+*   **Local Privilege Escalation:** The agent runs with the same permissions as the user who ran `npx @span-io/agent-link connect`. Do not run this as root.
 
 ### ⚠️ Threat Model: "Remote Shell"
 You should treat this client with the same security caution as an **SSH Session**.
