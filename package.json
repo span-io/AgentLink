@@ -4,7 +4,7 @@
   "description": "Secure bridge between Span (AI control plane) and local agent CLI tools.",
   "type": "module",
   "bin": {
-    "connect": "dist/index.js"
+    "agent-link": "dist/index.js"
   },
   "files": [
     "dist",
