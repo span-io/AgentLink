@@ -1,10 +1,10 @@
 {
-  "name": "@span-io/AgentLink",
+  "name": "@span-io/agent-link",
   "version": "0.0.1",
-  "description": "Secure bridge between remote agent orchestrators and local agent CLI tools.",
+  "description": "Secure bridge between Span (AI control plane) and local agent CLI tools.",
   "type": "module",
   "bin": {
-    "agent-link": "dist/index.js"
+    "connect": "dist/index.js"
   },
   "files": [
     "dist",

@@ -7,7 +7,7 @@ Think of it as a **reverse tunnel for AI agents**: The "brains" and history live
 ## 🚀 How It Works
 
 1.  **You run this CLI** on your laptop or dev server.
-2.  **It connects** to your Remote Agent Orchestrator via a secure WebSocket.
+2.  **It connects** to Span via a secure WebSocket.
 3.  **It waits for commands.** When you send a prompt in the Web UI, the server signals this client.
 4.  **It executes the agent** locally on your machine.
 5.  **It streams logs/output** back to the Web UI in real-time.
@@ -17,7 +17,7 @@ Think of it as a **reverse tunnel for AI agents**: The "brains" and history live
 You don't need to install this globally. We recommend running it on-demand via `npx`.
 
 ### 1. Connect a New Device
-In the Remote Agent Web UI, click **+ Connect New Device**. You will be given a pairing code.
+In the Span Web UI, click **+ Connect New Device**. You will be given a pairing code.
 
 Run the following command in your terminal:
 
@@ -25,7 +25,7 @@ Run the following command in your terminal:
 npx -y @span-io/agent-link connect --server https://your-server.com --pairing-code YOUR-PAIRING-CODE
 ```
 
-*Replace `https://your-server.com` with the URL of your orchestrator instance.*
+*Replace `https://your-server.com` with the URL of your Span instance.*
 
 ### 2. Run in Background
 Once paired, the client will save your credentials to `~/.config/remote-agent/client.json`. You can subsequently run it without the pairing code:
@@ -53,13 +53,13 @@ npx -y @span-io/agent-link connect --server ... --agent /usr/local/bin/my-custom
 *   **Drive-by Attacks:** The client does not listen on any open ports; it makes an outbound connection to the server.
 
 ### What it Does NOT Protect Against
-*   **Compromised Server:** If your Remote Agent Orchestrator server is hacked, an attacker can send "spawn" commands to your connected client.
+*   **Compromised Server:** If your Span server is hacked, an attacker can send "spawn" commands to your connected client.
 *   **Malicious Agent Output:** If the AI agent (e.g., Gemini) decides to run `rm -rf /`, this client will faithfully execute that command.
 *   **Local Privilege Escalation:** The agent runs with the same permissions as the user who ran `npx @span-io/agent-link connect`. Do not run this as root.
 
 ### ⚠️ Threat Model: "Remote Shell"
 You should treat this client with the same security caution as an **SSH Session**.
-*   **Difficulty for Malicious Actors:** If they compromise your Orchestrator account, gaining code execution on your local machine is **Trivial (Low Difficulty)**. They just need to send a prompt to the agent telling it to run a shell command.
+*   **Difficulty for Malicious Actors:** If they compromise your Span account, gaining code execution on your local machine is **Trivial (Low Difficulty)**. They just need to send a prompt to the agent telling it to run a shell command.
 *   **Mitigation:**
     *   Only connect to servers you trust.
     *   Run the client inside a Docker container or VM if you are working with untrusted inputs.
