@@ -1,6 +1,6 @@
 {
   "name": "@span-io/agent-link",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Secure bridge between Span (AI control plane) and local agent CLI tools.",
   "type": "module",
   "bin": {
