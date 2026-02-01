@@ -107,11 +107,19 @@ function handleControl(message: ServerControlMessage): void {
           preferredAgent = "gemini";
         } else if (targetModel.startsWith("claude-")) {
           preferredAgent = "claude";
+        } else if (targetModel.includes("codex") || targetModel.startsWith("gpt-")) {
+          preferredAgent = "codex";
         }
       }
 
       if (!preferredAgent) {
-        preferredAgent = payload?.name || "codex";
+        // Only use payload.name if it matches a known binary, otherwise default to codex
+        const candidateName = payload?.name?.toLowerCase();
+        if (candidateName && ["codex", "gemini", "claude"].includes(candidateName)) {
+            preferredAgent = candidateName;
+        } else {
+            preferredAgent = "codex";
+        }
       }
 
       const agentCandidate = resolveAgentBinary(preferredAgent, discovered);
