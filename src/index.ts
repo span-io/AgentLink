@@ -5,6 +5,7 @@ import { loadConfig, saveConfig } from "./config.js";
 import { findAgentsOnPath, resolveAgentBinary, type AgentProcess } from "./agent.js";
 import { spawnAgentProcess as spawnAgentProcessAdvanced, type SpawnedProcess } from "./process-runner.js";
 import { LogBuffer } from "./log-buffer.js";
+import { compactPrompt, resolvePromptCompactionPolicy } from "./prompt-compact.js";
 import { type ServerControlMessage } from "./protocol.js";
 import { NoopTransport, WebSocketTransport, type Transport } from "./transport.js";
 
@@ -58,6 +59,7 @@ if (args.pairingCode) {
 const logBuffer = new LogBuffer();
 // Update map to hold SpawnedProcess which includes the child
 const activeAgents = new Map<string, SpawnedProcess>();
+const promptPolicy = resolvePromptCompactionPolicy();
 
 let transport: Transport;
 try {
@@ -83,7 +85,13 @@ function handleControl(message: ServerControlMessage): void {
       let agentProc = activeAgents.get(agentId);
       if (agentProc) {
         if (payload?.prompt && agentProc.child.stdin) {
-          agentProc.child.stdin.write(`${payload.prompt}\n`);
+          const normalized = compactPrompt(payload.prompt, promptPolicy);
+          if (normalized.action !== "none") {
+            console.warn(
+              `Prompt ${normalized.action} (${normalized.reason ?? "threshold"}): ${normalized.originalLength} -> ${normalized.finalLength} chars.`,
+            );
+          }
+          agentProc.child.stdin.write(`${normalized.prompt}\n`);
         }
         return;
       }
@@ -131,13 +139,21 @@ function handleControl(message: ServerControlMessage): void {
 
       const optionsArgs = [...(payload?.args || args.agentArgs)];
       
+      const rawPrompt = payload?.prompt || "";
+      const normalized = compactPrompt(rawPrompt, promptPolicy);
+      if (normalized.action !== "none") {
+        console.warn(
+          `Prompt ${normalized.action} (${normalized.reason ?? "threshold"}): ${normalized.originalLength} -> ${normalized.finalLength} chars.`,
+        );
+      }
+
       const proc = spawnAgentProcessAdvanced({
         agent: {
             id: agentId,
             name: agentCandidate.name,
             model: targetModel || "codex-cli" 
         },
-        prompt: payload?.prompt || "",
+        prompt: normalized.prompt,
         optionsArgs,
         executablePath: agentCandidate.path
       });
@@ -164,7 +180,15 @@ function handleControl(message: ServerControlMessage): void {
       const proc = activeAgents.get(agentId);
       const data = message.data || payload?.prompt;
       if (proc && data && proc.child.stdin) {
-        proc.child.stdin.write(data.endsWith("\n") ? data : `${data}\n`);
+        const normalized = compactPrompt(data, promptPolicy);
+        if (normalized.action !== "none") {
+          console.warn(
+            `Prompt ${normalized.action} (${normalized.reason ?? "threshold"}): ${normalized.originalLength} -> ${normalized.finalLength} chars.`,
+          );
+        }
+        proc.child.stdin.write(
+          normalized.prompt.endsWith("\n") ? normalized.prompt : `${normalized.prompt}\n`,
+        );
       }
       break;
     }

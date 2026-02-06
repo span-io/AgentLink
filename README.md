@@ -72,6 +72,11 @@ Configuration is stored in `~/.config/remote-agent/client.json`.
 **Environment Variables:**
 *   `CODEX_BIN`, `GEMINI_BIN`, `CLAUDE_BIN`: Override the path to specific agent binaries.
 *   `CODEX_CWD`: Set the working directory for the agent (defaults to the directory where you ran the client).
+*   `AGENT_LINK_PROMPT_CHAR_LIMIT` (or `CODEX_PROMPT_CHAR_LIMIT`): Hard cap for prompt length in characters (default `200000`).
+*   `AGENT_LINK_PROMPT_CHAR_THRESHOLD` (or `CODEX_PROMPT_CHAR_THRESHOLD`): Length at which compaction kicks in (default `90%` of limit).
+*   `AGENT_LINK_PROMPT_CHAR_TARGET` (or `CODEX_PROMPT_CHAR_TARGET`): Target length after compaction (default `85%` of limit).
+*   `AGENT_LINK_PROMPT_COMPACT` (or `CODEX_PROMPT_COMPACT`): `auto`, `summary`, `truncate`, or `off` (default `auto`).
+*   `AGENT_LINK_PROMPT_SUMMARY_LINES` (or `CODEX_PROMPT_SUMMARY_LINES`): Max lines to include in heuristic summary (default `20`).
 
 ## License
 
