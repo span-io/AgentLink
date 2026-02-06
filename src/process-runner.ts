@@ -147,10 +147,16 @@ export function spawnAgentProcess(config: SpawnConfig): SpawnedProcess {
     
     // For logging/display
     const commandString = [command, ...args].map(shellQuote).join(" ");
-    const finalCommand = useScriptWrapper ? "script" : command;
-    // Script wrapper args: -q (quiet), -c (command), /dev/null (output file)
-    const finalArgs = useScriptWrapper
-      ? ["-q", "-c", commandString, "/dev/null"]
+    const platform = process.platform;
+    const canUseScript =
+      useScriptWrapper && platform !== "win32";
+    const finalCommand = canUseScript ? "script" : command;
+    const finalArgs = canUseScript
+      ? platform === "darwin"
+        // BSD script: no -c, use "script -q /dev/null sh -c <command>"
+        ? ["-q", "/dev/null", "sh", "-c", commandString]
+        // GNU script: "script -q -c <command> /dev/null"
+        : ["-q", "-c", commandString, "/dev/null"]
       : args;
 
     const child = spawn(finalCommand, finalArgs, {
