@@ -1,3 +1,4 @@
+import { mkdirSync } from "fs";
 import { spawn } from "child_process";
 
 // Types adapted for Client
@@ -39,6 +40,60 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
 
+function collectDirectoriesFromArgs(args: string[]): string[] {
+  const directories: string[] = [];
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    const next = args[i + 1];
+
+    if ((arg === "--cd" || arg === "-C" || arg === "--add-dir" || arg === "--include-directories") && typeof next === "string") {
+      directories.push(next);
+      i += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--cd=")) {
+      directories.push(arg.slice("--cd=".length));
+      continue;
+    }
+
+    if (arg.startsWith("--add-dir=")) {
+      directories.push(arg.slice("--add-dir=".length));
+      continue;
+    }
+
+    if (arg.startsWith("--include-directories=")) {
+      const raw = arg.slice("--include-directories=".length);
+      raw
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .forEach((entry) => directories.push(entry));
+      continue;
+    }
+  }
+
+  return directories;
+}
+
+function ensureDirectoriesExist(rawDirs: string[]): void {
+  const deduped = new Set(
+    rawDirs
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0),
+  );
+
+  for (const dir of deduped) {
+    try {
+      mkdirSync(dir, { recursive: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to create working directory '${dir}': ${message}`);
+    }
+  }
+}
+
 export function buildCommand(
   { agent, prompt, optionsArgs = [], executablePath }: SpawnConfig,
   promptModeOverride?: "args" | "stdin",
@@ -69,7 +124,16 @@ export function buildCommand(
   // 2. Claude Models
   if (agent.model.startsWith("claude-")) {
     const command = executablePath ?? process.env.CLAUDE_BIN ?? "claude";
-    const args = ["-p", prompt, "--model", agent.model];
+    const args = ["-p", prompt];
+
+    if (optionsArgs.length > 0) {
+      args.push(...optionsArgs);
+    }
+
+    if (!args.includes("--model") && !args.includes("-m")) {
+      args.push("--model", agent.model);
+    }
+
     return { command, args, promptMode: "args" };
   }
 
@@ -77,12 +141,12 @@ export function buildCommand(
   const command = executablePath ?? process.env.CODEX_BIN ?? "codex";
   const rawArgs = process.env.CODEX_ARGS ?? DEFAULT_CODEX_ARGS;
   const promptFlag = process.env.CODEX_PROMPT_FLAG ?? DEFAULT_PROMPT_FLAG;
-  
+
   // Determine Prompt Mode
   const envPromptMode =
     process.env.CODEX_PROMPT_MODE === "stdin" ? "stdin" : "args";
   const promptMode = promptModeOverride ?? envPromptMode;
-  
+
   const extraArgs = optionsArgs.filter((arg) => arg.trim() !== "");
   const args = splitArgs(rawArgs);
 
@@ -127,16 +191,17 @@ export function spawnAgentProcess(config: SpawnConfig): SpawnedProcess {
   const startedAt = new Date().toISOString();
   const isCodexModel =
     !agent.model.startsWith("gemini-") && !agent.model.startsWith("claude-");
-  const sanitizedOptions = agent.model.startsWith("claude-")
-    ? []
-    : optionsArgs;
+  const sanitizedOptions = optionsArgs;
 
   const spawnWithMode = (promptModeOverride?: "args" | "stdin"): SpawnedProcess => {
     const { command, args, promptMode } = buildCommand(
       { ...config, optionsArgs: sanitizedOptions },
       promptModeOverride,
     );
-    
+
+    // Ensure requested project/working directories exist before launching CLI.
+    ensureDirectoriesExist(collectDirectoriesFromArgs(args));
+
     const ttyMode = process.env.CODEX_TTY_MODE ?? DEFAULT_TTY_MODE;
     const hasExec = args.includes("exec");
     const useScriptWrapper =
@@ -144,7 +209,7 @@ export function spawnAgentProcess(config: SpawnConfig): SpawnedProcess {
     const ttyTerm = process.env.CODEX_TTY_TERM ?? DEFAULT_TTY_TERM;
     const defaultCwd = process.cwd(); // Client uses current working dir
     const workingDir = process.env.CODEX_CWD ?? defaultCwd;
-    
+
     // For logging/display
     const commandString = [command, ...args].map(shellQuote).join(" ");
     const platform = process.platform;
