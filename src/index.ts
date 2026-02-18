@@ -196,37 +196,54 @@ function handleControl(message: ServerControlMessage): void {
 }
 
 function setupAgentPiping(agentId: string, proc: SpawnedProcess) {
+  const rawFlushSize = Number.parseInt(process.env.AGENT_LINK_STREAM_FLUSH_CHARS ?? "16384", 10);
+  const flushSize = Number.isFinite(rawFlushSize) && rawFlushSize > 0 ? rawFlushSize : 16384;
+
   const setupStream = (stream: NodeJS.ReadableStream | null, name: "stdout" | "stderr") => {
     if (!stream) return;
     let buffer = "";
     stream.setEncoding("utf8");
+
+    const flushChunk = (chunk: string) => {
+      if (chunk.length > 0) {
+        transport.sendLog(agentId, name, chunk);
+      }
+    };
+
     stream.on("data", (chunk: string) => {
       buffer += chunk;
       let index = buffer.indexOf("\n");
       while (index >= 0) {
         const line = buffer.slice(0, index + 1);
         buffer = buffer.slice(index + 1);
-        transport.sendLog(agentId, name, line);
+        flushChunk(line);
         index = buffer.indexOf("\n");
       }
-    });
-    stream.on("end", () => {
-      if (buffer.length > 0) {
-        transport.sendLog(agentId, name, buffer);
+
+      // Prevent unbounded memory growth when tools stream without newlines.
+      while (buffer.length >= flushSize) {
+        const part = buffer.slice(0, flushSize);
+        buffer = buffer.slice(flushSize);
+        flushChunk(part);
       }
+    });
+
+    stream.on("end", () => {
+      flushChunk(buffer);
+      buffer = "";
     });
   };
 
   setupStream(proc.child.stdout, "stdout");
   setupStream(proc.child.stderr, "stderr");
 
-  proc.child.on("exit", (code, signal) => {
+  proc.child.on("exit", (_code, _signal) => {
     transport.sendStatus(agentId, "exited");
     activeAgents.delete(agentId);
   });
 
   proc.child.on("error", (error) => {
-    transport.sendLog(agentId, "stderr", `Process error: ${error.message}\n`);
+    transport.sendLog(agentId, "stderr", "Process error: " + error.message + "\n");
     transport.sendStatus(agentId, "error");
     activeAgents.delete(agentId);
   });
