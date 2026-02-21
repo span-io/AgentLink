@@ -1,4 +1,5 @@
 import { mkdirSync } from "fs";
+import path from "path";
 import { spawn } from "child_process";
 
 // Types adapted for Client
@@ -37,7 +38,37 @@ function splitArgs(raw: string): string[] {
 
 function shellQuote(value: string): string {
   // Simple single-quote wrapping for display purposes
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
+  return `'${value.replace(/'/g, `"'"'`)}'`;
+}
+
+function parseAllowedRoots(): string[] {
+  const raw = process.env.AGENT_LINK_ALLOWED_WORKDIR_ROOTS?.trim();
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => path.resolve(entry));
+}
+
+function isUnderRoot(candidate: string, root: string): boolean {
+  const rel = path.relative(root, candidate);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+function assertAllowedDirectory(directory: string, allowedRoots: string[], label: string): void {
+  if (allowedRoots.length === 0) {
+    return;
+  }
+  const resolved = path.resolve(directory);
+  const allowed = allowedRoots.some((root) => isUnderRoot(resolved, root));
+  if (!allowed) {
+    throw new Error(
+      `${label} '${resolved}' is outside AGENT_LINK_ALLOWED_WORKDIR_ROOTS (${allowedRoots.join(", ")}).`,
+    );
+  }
 }
 
 function collectDirectoriesFromArgs(args: string[]): string[] {
@@ -77,7 +108,7 @@ function collectDirectoriesFromArgs(args: string[]): string[] {
   return directories;
 }
 
-function ensureDirectoriesExist(rawDirs: string[]): void {
+function ensureDirectoriesExist(rawDirs: string[], allowedRoots: string[]): void {
   const deduped = new Set(
     rawDirs
       .map((entry) => entry.trim())
@@ -85,11 +116,13 @@ function ensureDirectoriesExist(rawDirs: string[]): void {
   );
 
   for (const dir of deduped) {
+    const resolved = path.resolve(dir);
+    assertAllowedDirectory(resolved, allowedRoots, "Requested directory");
     try {
-      mkdirSync(dir, { recursive: true });
+      mkdirSync(resolved, { recursive: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to create working directory '${dir}': ${message}`);
+      throw new Error(`Failed to create working directory '${resolved}': ${message}`);
     }
   }
 }
@@ -192,6 +225,7 @@ export function spawnAgentProcess(config: SpawnConfig): SpawnedProcess {
   const isCodexModel =
     !agent.model.startsWith("gemini-") && !agent.model.startsWith("claude-");
   const sanitizedOptions = optionsArgs;
+  const allowedRoots = parseAllowedRoots();
 
   const spawnWithMode = (promptModeOverride?: "args" | "stdin"): SpawnedProcess => {
     const { command, args, promptMode } = buildCommand(
@@ -200,7 +234,7 @@ export function spawnAgentProcess(config: SpawnConfig): SpawnedProcess {
     );
 
     // Ensure requested project/working directories exist before launching CLI.
-    ensureDirectoriesExist(collectDirectoriesFromArgs(args));
+    ensureDirectoriesExist(collectDirectoriesFromArgs(args), allowedRoots);
 
     const ttyMode = process.env.CODEX_TTY_MODE ?? DEFAULT_TTY_MODE;
     const hasExec = args.includes("exec");
@@ -209,6 +243,7 @@ export function spawnAgentProcess(config: SpawnConfig): SpawnedProcess {
     const ttyTerm = process.env.CODEX_TTY_TERM ?? DEFAULT_TTY_TERM;
     const defaultCwd = process.cwd(); // Client uses current working dir
     const workingDir = process.env.CODEX_CWD ?? defaultCwd;
+    assertAllowedDirectory(workingDir, allowedRoots, "Spawn cwd");
 
     // For logging/display
     const commandString = [command, ...args].map(shellQuote).join(" ");

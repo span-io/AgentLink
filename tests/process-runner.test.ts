@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { buildCommand } from '../src/process-runner.js'; // We will create this
+import { buildCommand, spawnAgentProcess } from '../src/process-runner.js';
 
 describe('Process Runner - buildCommand', () => {
   const mockAgent = {
@@ -17,8 +17,6 @@ describe('Process Runner - buildCommand', () => {
     });
 
     assert.strictEqual(result.command, 'codex');
-    // Expect: codex exec --skip-git-repo-check --model codex-cli hello world
-    // Note: The specific flags depend on logic we port.
     assert.ok(result.args.includes('exec'));
     assert.ok(result.args.includes('--model'));
     assert.ok(result.args.includes(mockAgent.model));
@@ -34,7 +32,6 @@ describe('Process Runner - buildCommand', () => {
       optionsArgs: []
     });
 
-    // Expect: gemini --model gemini-2.0-flash --approval-mode auto_edit -p "hello gemini"
     assert.strictEqual(result.command, 'gemini');
     assert.ok(result.args.includes('--model'));
     assert.ok(result.args.includes('gemini-2.0-flash'));
@@ -44,8 +41,6 @@ describe('Process Runner - buildCommand', () => {
   });
 
   it('handles stdin prompt mode', () => {
-    // We'll need to simulate env var override or pass a config
-    // For this test, let's assume we can pass an override to buildCommand
     const result = buildCommand({
       agent: mockAgent,
       prompt: 'long prompt',
@@ -53,7 +48,6 @@ describe('Process Runner - buildCommand', () => {
     }, 'stdin');
 
     assert.strictEqual(result.promptMode, 'stdin');
-    // Should NOT have the prompt in args
     assert.ok(!result.args.includes('long prompt'));
     assert.ok(result.args.includes('--model'));
   });
@@ -67,5 +61,36 @@ describe('Process Runner - buildCommand', () => {
 
     assert.ok(result.args.includes('--verbose'));
     assert.ok(result.args.includes('--custom-flag'));
+  });
+
+  it('blocks spawn when working directory is outside allowed roots', () => {
+    const previousRoots = process.env.AGENT_LINK_ALLOWED_WORKDIR_ROOTS;
+    const previousCwd = process.env.CODEX_CWD;
+
+    process.env.AGENT_LINK_ALLOWED_WORKDIR_ROOTS = '/tmp/agent-link-safe-root';
+    process.env.CODEX_CWD = '/etc';
+
+    assert.throws(
+      () =>
+        spawnAgentProcess({
+          agent: mockAgent,
+          prompt: 'hi',
+          optionsArgs: [],
+          executablePath: '/bin/echo',
+        }),
+      /outside AGENT_LINK_ALLOWED_WORKDIR_ROOTS/,
+    );
+
+    if (previousRoots === undefined) {
+      delete process.env.AGENT_LINK_ALLOWED_WORKDIR_ROOTS;
+    } else {
+      process.env.AGENT_LINK_ALLOWED_WORKDIR_ROOTS = previousRoots;
+    }
+
+    if (previousCwd === undefined) {
+      delete process.env.CODEX_CWD;
+    } else {
+      process.env.CODEX_CWD = previousCwd;
+    }
   });
 });

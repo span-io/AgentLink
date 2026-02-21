@@ -58,4 +58,9 @@ export function saveConfig(config: ClientConfig): void {
   }
   
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(toSave, null, 2), "utf8");
+  try {
+    fs.chmodSync(CONFIG_FILE, 0o600);
+  } catch (error) {
+    console.warn("Failed to set secure permissions on config file:", error);
+  }
 }
