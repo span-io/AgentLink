@@ -1,4 +1,4 @@
-import type { BootstrapEventStatus, LogEntry } from "./protocol.js";
+import type { BootstrapEventStatus } from "./protocol.js";
 import { encodeEnvelope, nowIso, type ServerControlMessage } from "./protocol.js";
 import { LogBuffer } from "./log-buffer.js";
 import os from "os";
@@ -18,6 +18,37 @@ export interface Transport {
   sendStatus(agentId: string, state: "running" | "exited" | "error"): void;
   sendBootstrap(runId: string, status: BootstrapEventStatus, message?: string): void;
   close(): void;
+}
+
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+function isTruthyEnv(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
+function assertSecureTransport(url: URL): void {
+  const allowInsecure = isTruthyEnv(process.env.AGENT_LINK_ALLOW_INSECURE_TRANSPORT);
+  const isLocal = LOCAL_HOSTS.has(url.hostname.toLowerCase());
+
+  if (url.protocol === "https:" || url.protocol === "wss:") {
+    return;
+  }
+
+  if ((url.protocol === "http:" || url.protocol === "ws:") && (allowInsecure || isLocal)) {
+    return;
+  }
+
+  throw new Error(
+    "Insecure transport is blocked. Use https:// (or set AGENT_LINK_ALLOW_INSECURE_TRANSPORT=1 for explicit local override).",
+  );
+}
+
+function toDisplayUrl(url: URL): string {
+  const clone = new URL(url.toString());
+  clone.search = "";
+  clone.hash = "";
+  return clone.toString();
 }
 
 export class NoopTransport implements Transport {
@@ -69,7 +100,7 @@ export class WebSocketTransport implements Transport {
 
   private async establishConnection(): Promise<void> {
     const { serverUrl, tokenProvider } = this.options;
-    
+
     let token: string;
     try {
       token = await tokenProvider();
@@ -80,6 +111,7 @@ export class WebSocketTransport implements Transport {
     }
 
     const url = new URL("/api/ws", serverUrl);
+    assertSecureTransport(url);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     url.searchParams.set("token", token);
 
@@ -92,7 +124,7 @@ export class WebSocketTransport implements Transport {
         this.socket.close();
       }
 
-      console.log(`Connecting to ${url.toString()}...`);
+      console.log(`Connecting to ${toDisplayUrl(url)}...`);
       const socket = new WebSocket(url.toString());
       this.socket = socket;
 
@@ -101,36 +133,36 @@ export class WebSocketTransport implements Transport {
         this.retryCount = 0;
         this.heartbeat();
         this.startPingInterval();
-        
+
         this.socket?.send(
           encodeEnvelope({
             type: "hello",
             clientId: this.options.clientId,
             ts: nowIso(),
             payload: { device: os.hostname(), platform: os.platform() },
-          })
+          }),
         );
-        
+
         socket.onclose = this.handleClose.bind(this);
         socket.onerror = (error) => {
-           console.error("WebSocket error:", error);
+          console.error("WebSocket error:", error);
         };
         resolve();
       };
 
-      const onFail = (err: any) => {
-         console.error("WebSocket connection failed to open.");
-         reject(new Error("WebSocket connection failed"));
+      const onFail = (_err: unknown) => {
+        console.error("WebSocket connection failed to open.");
+        reject(new Error("WebSocket connection failed"));
       };
 
       socket.onopen = onOpen;
       socket.onerror = onFail;
-      
+
       socket.onmessage = (event) => {
         this.heartbeat();
         const rawData = event.data;
         const data = typeof rawData === "string" ? rawData : rawData.toString();
-        
+
         if (data === "pong") return;
         if (data === "ping") {
           this.socket?.send("pong");
@@ -147,7 +179,7 @@ export class WebSocketTransport implements Transport {
           } else if (message.type === "ack" && typeof message.id === "number") {
             this.options.onAck(message.id);
           }
-        } catch (err) {
+        } catch {
           // ignore malformed
         }
       };
@@ -176,7 +208,7 @@ export class WebSocketTransport implements Transport {
         type: "log",
         sessionId: agentId,
         payload: { stream, message },
-      })
+      }),
     );
   }
 
@@ -187,7 +219,7 @@ export class WebSocketTransport implements Transport {
         type: "status",
         sessionId: agentId,
         payload: { state },
-      })
+      }),
     );
   }
 
