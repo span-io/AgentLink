@@ -10,29 +10,35 @@ export type ClientEnvelope = {
     | "error"
     | "ping"
     | "pong";
-  clientId: string;
-  sessionId?: string; // This will be the agentId from the server
+  sessionId?: string;
+  clientId?: string;
   seq?: number;
-  ts: string;
-  payload?: any;
+  ts?: string;
+  payload?: unknown;
 };
+
+export type BootstrapControlPayload = {
+  runId?: string;
+  workingDirectory?: string;
+  command?: string;
+  args?: string[];
+  timeoutMs?: number;
+  env?: Record<string, string>;
+};
+
+export type ControlPayload = {
+  prompt?: string;
+  args?: string[];
+  model?: string;
+  name?: string;
+} & Partial<BootstrapControlPayload>;
 
 export type ServerControlMessage = {
   type: "control";
   action: "spawn" | "start" | "stop" | "stdin" | "prompt" | "ping" | "bootstrap";
   agentId?: string;
   data?: string;
-  payload?: {
-    prompt?: string;
-    args?: string[];
-    model?: string;
-    name?: string;
-    runId?: string;
-    workingDirectory?: string;
-    command?: string;
-    timeoutMs?: number;
-    env?: Record<string, string>;
-  };
+  payload?: ControlPayload;
 };
 
 export type BootstrapEventStatus = "started" | "log" | "complete" | "error";
@@ -40,7 +46,7 @@ export type BootstrapEventStatus = "started" | "log" | "complete" | "error";
 export type LogEntry = {
   id: number;
   at: string;
-  stream: "stdout" | "stderr" | "system";
+  stream: "stdout" | "stderr";
   message: string;
 };
 

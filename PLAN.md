@@ -56,3 +56,30 @@
 - [x] **Reliability**: Heartbeats (Ping/Pong) and client-side watchdog (30s timeout).
 - [x] **Security**: Refresh tokens are stored in an encrypted local file (`.remote-agent-client/config.json`) using a machine-specific key.
 - [x] **Client Execution**: Spawning of local agents (`codex`, `gemini`, `claude`) and stdio piping is functional.
+
+## 8) Healthcheck Findings and Hardening Plan (2026-02-21)
+### Findings
+- Bootstrap command execution currently accepts arbitrary `command`, `args`, and `env` from control payloads.
+- Bootstrap execution can run concurrently, which risks race conditions in shared working directories.
+- Bootstrap error handling is partially implicit (`void` async call path) and should be explicit/observable.
+- Bootstrap path has minimal automated test coverage.
+
+### Implementation plan
+1. Add strict bootstrap command policy:
+- Introduce allowlist for commands (`npx`, `npm`) and configurable allowlist via env.
+- Normalize and validate args with size/count caps.
+- Restrict env passthrough to a controlled allowlist.
+
+2. Add bootstrap concurrency controls:
+- Single in-flight bootstrap guard with clear error event when already running.
+- Deterministic cleanup on completion/error/timeout.
+
+3. Strengthen runtime safety and observability:
+- Wrap bootstrap execution in explicit try/catch around mkdir/spawn lifecycle.
+- Emit structured bootstrap start/log/complete/error events for every terminal path.
+
+4. Add tests:
+- Command allowlist validation.
+- Env sanitization behavior.
+- Single in-flight bootstrap lock behavior.
+- Success/error terminal event emission.

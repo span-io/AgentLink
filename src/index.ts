@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 import os from "os";
 import process from "process";
-import { spawn } from "child_process";
-import { mkdir } from "fs/promises";
 import { loadConfig, saveConfig } from "./config.js";
 import { findAgentsOnPath, resolveAgentBinary, type AgentProcess } from "./agent.js";
 import { spawnAgentProcess as spawnAgentProcessAdvanced, type SpawnedProcess } from "./process-runner.js";
 import { LogBuffer } from "./log-buffer.js";
 import { compactPrompt, resolvePromptCompactionPolicy } from "./prompt-compact.js";
 import { type ServerControlMessage } from "./protocol.js";
+import { BootstrapRunner } from "./bootstrap.js";
 import { NoopTransport, WebSocketTransport, type Transport } from "./transport.js";
 
 type CliArgs = {
@@ -62,6 +61,7 @@ const logBuffer = new LogBuffer();
 // Update map to hold SpawnedProcess which includes the child
 const activeAgents = new Map<string, SpawnedProcess>();
 const promptPolicy = resolvePromptCompactionPolicy();
+const bootstrapRunner = new BootstrapRunner();
 
 let transport: Transport;
 try {
@@ -80,7 +80,7 @@ try {
 function handleControl(message: ServerControlMessage): void {
   const { action, agentId, payload } = message;
   if (action === "bootstrap") {
-    void runBootstrapCommand(payload ?? {});
+    void bootstrapRunner.run(payload ?? {}, transport);
     return;
   }
   if (!agentId) return;
@@ -199,91 +199,6 @@ function handleControl(message: ServerControlMessage): void {
       break;
     }
   }
-}
-
-async function runBootstrapCommand(payload: {
-  runId?: string;
-  workingDirectory?: string;
-  command?: string;
-  args?: string[];
-  timeoutMs?: number;
-  env?: Record<string, string>;
-}) {
-  const runId = typeof payload.runId === "string" ? payload.runId.trim() : "";
-  if (!runId) {
-    return;
-  }
-  const workingDirectory =
-    typeof payload.workingDirectory === "string" ? payload.workingDirectory.trim() : "";
-  if (!workingDirectory) {
-    transport.sendBootstrap(runId, "error", "Missing workingDirectory.");
-    return;
-  }
-  const command = typeof payload.command === "string" && payload.command.trim()
-    ? payload.command.trim()
-    : "npx";
-  const args = Array.isArray(payload.args)
-    ? payload.args.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-    : [];
-  const timeoutMs = typeof payload.timeoutMs === "number" && payload.timeoutMs > 0 ? payload.timeoutMs : 10 * 60 * 1000;
-  const env = {
-    ...process.env,
-    ...(payload.env && typeof payload.env === "object" ? payload.env : {}),
-  };
-
-  await mkdir(workingDirectory, { recursive: true });
-  transport.sendBootstrap(
-    runId,
-    "started",
-    `Running bootstrap command: ${command} ${args.join(" ")} (cwd=${workingDirectory})`,
-  );
-
-  await new Promise<void>((resolve) => {
-    const child = spawn(command, args, {
-      cwd: workingDirectory,
-      env,
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    let settled = false;
-    const complete = (status: "complete" | "error", message: string) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      transport.sendBootstrap(runId, status, message);
-      resolve();
-    };
-
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      complete("error", `Bootstrap timed out after ${timeoutMs}ms.`);
-    }, timeoutMs);
-
-    child.stdout?.setEncoding("utf8");
-    child.stderr?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk: string) => {
-      transport.sendBootstrap(runId, "log", chunk);
-    });
-    child.stderr?.on("data", (chunk: string) => {
-      transport.sendBootstrap(runId, "log", chunk);
-    });
-    child.on("error", (error) => {
-      complete("error", `Bootstrap process error: ${error.message}`);
-    });
-    child.on("exit", (code, signal) => {
-      if (code === 0) {
-        complete("complete", "Bootstrap completed successfully.");
-      } else {
-        complete(
-          "error",
-          `Bootstrap exited with code ${String(code ?? "null")} signal ${String(signal ?? "null")}.`,
-        );
-      }
-    });
-  });
 }
 
 function setupAgentPiping(agentId: string, proc: SpawnedProcess) {
