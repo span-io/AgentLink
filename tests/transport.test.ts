@@ -20,9 +20,9 @@ class MockWebSocket {
 
   constructor(public url: string) {
     MockWebSocket.instances.push(this);
-    setTimeout(() => {
+    queueMicrotask(() => {
       if (this.onopen) this.onopen();
-    }, 10);
+    });
   }
 
   send(data: string) {
@@ -53,8 +53,7 @@ describe("WebSocketTransport", () => {
     MockWebSocket.instances = [];
   });
 
-  it("should connect and send hello", async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+  it("should connect and send hello", async () => {
     const logBuffer = new LogBuffer();
     transport = new WebSocketTransport({
       serverUrl: "http://localhost:3000",
@@ -65,9 +64,7 @@ describe("WebSocketTransport", () => {
       onAck: () => {},
     });
 
-    const connectPromise = transport.connect();
-    t.mock.timers.tick(15);
-    await connectPromise;
+    await transport.connect();
 
     assert.strictEqual(MockWebSocket.instances.length, 1);
     const ws = MockWebSocket.instances[0];
@@ -93,8 +90,7 @@ describe("WebSocketTransport", () => {
     assert.strictEqual(MockWebSocket.instances.length, 0);
   });
 
-  it("should send log in specified format", async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+  it("should send log in specified format", async () => {
     const logBuffer = new LogBuffer();
     transport = new WebSocketTransport({
       serverUrl: "http://localhost:3000",
@@ -105,9 +101,7 @@ describe("WebSocketTransport", () => {
       onAck: () => {},
     });
 
-    const connectPromise = transport.connect();
-    t.mock.timers.tick(15);
-    await connectPromise;
+    await transport.connect();
 
     transport.sendLog("agent-1", "stdout", "hello world");
 
@@ -119,8 +113,7 @@ describe("WebSocketTransport", () => {
     assert.strictEqual(logMsg.payload.message, "hello world");
   });
 
-  it("should respond to ping literal with pong literal", async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+  it("should respond to ping literal with pong literal", async () => {
     const logBuffer = new LogBuffer();
     transport = new WebSocketTransport({
       serverUrl: "http://localhost:3000",
@@ -131,9 +124,7 @@ describe("WebSocketTransport", () => {
       onAck: () => {},
     });
 
-    const connectPromise = transport.connect();
-    t.mock.timers.tick(15);
-    await connectPromise;
+    await transport.connect();
     const ws = MockWebSocket.instances[0];
 
     if (ws.onmessage) {
