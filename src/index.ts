@@ -9,8 +9,9 @@ import { findAgentsOnPath, resolveAgentBinary, type AgentProcess } from "./agent
 import { spawnAgentProcess as spawnAgentProcessAdvanced, type SpawnedProcess } from "./process-runner.js";
 import { LogBuffer } from "./log-buffer.js";
 import { compactPrompt, resolvePromptCompactionPolicy } from "./prompt-compact.js";
-import { type ServerControlMessage } from "./protocol.js";
+import { type CommandControlPayload, type ServerControlMessage } from "./protocol.js";
 import { BootstrapRunner } from "./bootstrap.js";
+import { RemoteCommandRunner } from "./remote-command.js";
 import { NoopTransport, WebSocketTransport, type Transport } from "./transport.js";
 
 type CliArgs = {
@@ -65,6 +66,7 @@ const logBuffer = new LogBuffer();
 const activeAgents = new Map<string, SpawnedProcess>();
 const promptPolicy = resolvePromptCompactionPolicy();
 const bootstrapRunner = new BootstrapRunner();
+const remoteCommandRunner = new RemoteCommandRunner();
 
 let transport: Transport;
 try {
@@ -88,6 +90,10 @@ function handleControl(message: ServerControlMessage): void {
   }
   if (action === "check_file") {
     void runRemoteFileCheck(payload ?? {}, transport);
+    return;
+  }
+  if (action === "execute_command") {
+    void runRemoteCommand(payload ?? {}, transport);
     return;
   }
   if (!agentId) return;
@@ -243,10 +249,18 @@ async function runRemoteFileCheck(
 
   try {
     await access(target, fsConstants.F_OK);
-    transport.sendPreflight(runId, "complete", true, `${filePath} exists.`);
+    transport.sendPreflight(runId, "complete", true, filePath + " exists.");
   } catch {
-    transport.sendPreflight(runId, "complete", false, `${filePath} not found.`);
+    transport.sendPreflight(runId, "complete", false, filePath + " not found.");
   }
+}
+
+async function runRemoteCommand(payload: CommandControlPayload, transport: Transport): Promise<void> {
+  await remoteCommandRunner.run(payload, {
+    sendCommand: (requestId, status, details) => {
+      transport.sendCommand(requestId, status, details);
+    },
+  });
 }
 
 function setupAgentPiping(agentId: string, proc: SpawnedProcess) {

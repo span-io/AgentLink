@@ -8,6 +8,7 @@ export type ClientEnvelope = {
     | "control"
     | "bootstrap"
     | "preflight"
+    | "command"
     | "error"
     | "ping"
     | "pong";
@@ -33,16 +34,35 @@ export type FileCheckControlPayload = {
   filePath?: string;
 };
 
+export type CommandControlPayload = {
+  requestId?: string;
+  runId?: string;
+  agentId?: string;
+  workingDirectory?: string;
+  command?: string;
+  args?: string[];
+  timeoutMs?: number;
+};
+
 export type ControlPayload = {
   prompt?: string;
   args?: string[];
   model?: string;
   name?: string;
-} & Partial<BootstrapControlPayload> & Partial<FileCheckControlPayload>;
+} & Partial<BootstrapControlPayload> & Partial<FileCheckControlPayload> & Partial<CommandControlPayload>;
 
 export type ServerControlMessage = {
   type: "control";
-  action: "spawn" | "start" | "stop" | "stdin" | "prompt" | "ping" | "bootstrap" | "check_file";
+  action:
+    | "spawn"
+    | "start"
+    | "stop"
+    | "stdin"
+    | "prompt"
+    | "ping"
+    | "bootstrap"
+    | "check_file"
+    | "execute_command";
   agentId?: string;
   data?: string;
   payload?: ControlPayload;
@@ -50,6 +70,7 @@ export type ServerControlMessage = {
 
 export type BootstrapEventStatus = "started" | "log" | "complete" | "error";
 export type PreflightEventStatus = "complete" | "error";
+export type CommandEventStatus = "started" | "completed" | "error";
 
 export type LogEntry = {
   id: number;

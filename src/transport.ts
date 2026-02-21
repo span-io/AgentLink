@@ -1,4 +1,4 @@
-import type { BootstrapEventStatus, PreflightEventStatus } from "./protocol.js";
+import type { BootstrapEventStatus, CommandEventStatus, PreflightEventStatus } from "./protocol.js";
 import { encodeEnvelope, nowIso, type ServerControlMessage } from "./protocol.js";
 import { LogBuffer } from "./log-buffer.js";
 import os from "os";
@@ -18,6 +18,16 @@ export interface Transport {
   sendStatus(agentId: string, state: "running" | "exited" | "error"): void;
   sendBootstrap(runId: string, status: BootstrapEventStatus, message?: string): void;
   sendPreflight(runId: string, status: PreflightEventStatus, exists?: boolean, message?: string): void;
+  sendCommand(
+    requestId: string,
+    status: CommandEventStatus,
+    details?: {
+      exitCode?: number;
+      stdout?: string;
+      stderr?: string;
+      message?: string;
+    },
+  ): void;
   close(): void
 }
 
@@ -66,6 +76,18 @@ export class NoopTransport implements Transport {
     return undefined;
   }
   sendPreflight(_runId: string, _status: PreflightEventStatus, _exists?: boolean, _message?: string): void {
+    return undefined;
+  }
+  sendCommand(
+    _requestId: string,
+    _status: CommandEventStatus,
+    _details?: {
+      exitCode?: number;
+      stdout?: string;
+      stderr?: string;
+      message?: string;
+    },
+  ): void {
     return undefined;
   }
   close(): void {
@@ -251,6 +273,29 @@ export class WebSocketTransport implements Transport {
           status,
           exists,
           message,
+        },
+      }),
+    );
+  }
+
+  sendCommand(
+    requestId: string,
+    status: CommandEventStatus,
+    details?: {
+      exitCode?: number;
+      stdout?: string;
+      stderr?: string;
+      message?: string;
+    },
+  ): void {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    this.socket.send(
+      JSON.stringify({
+        type: "command",
+        payload: {
+          requestId,
+          status,
+          ...details,
         },
       }),
     );

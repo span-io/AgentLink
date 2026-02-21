@@ -133,4 +133,28 @@ describe("WebSocketTransport", () => {
 
     assert.strictEqual(ws.sentMessages.includes("pong"), true);
   });
+
+  it("should send command event in specified format", async () => {
+    const logBuffer = new LogBuffer();
+    transport = new WebSocketTransport({
+      serverUrl: "http://localhost:3000",
+      tokenProvider: async () => "abc",
+      clientId: "client1",
+      logBuffer,
+      onControl: () => {},
+      onAck: () => {},
+    });
+
+    await transport.connect();
+
+    transport.sendCommand("req-1", "completed", { exitCode: 0, stdout: "done" });
+
+    const ws = MockWebSocket.instances[0];
+    const msg = JSON.parse(ws.sentMessages[1]);
+    assert.strictEqual(msg.type, "command");
+    assert.strictEqual(msg.payload.requestId, "req-1");
+    assert.strictEqual(msg.payload.status, "completed");
+    assert.strictEqual(msg.payload.exitCode, 0);
+    assert.strictEqual(msg.payload.stdout, "done");
+  });
 });
