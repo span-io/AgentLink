@@ -1,4 +1,4 @@
-import type { BootstrapEventStatus } from "./protocol.js";
+import type { BootstrapEventStatus, PreflightEventStatus } from "./protocol.js";
 import { encodeEnvelope, nowIso, type ServerControlMessage } from "./protocol.js";
 import { LogBuffer } from "./log-buffer.js";
 import os from "os";
@@ -17,7 +17,8 @@ export interface Transport {
   sendLog(agentId: string, stream: "stdout" | "stderr", message: string): void;
   sendStatus(agentId: string, state: "running" | "exited" | "error"): void;
   sendBootstrap(runId: string, status: BootstrapEventStatus, message?: string): void;
-  close(): void;
+  sendPreflight(runId: string, status: PreflightEventStatus, exists?: boolean, message?: string): void;
+  close(): void
 }
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
@@ -62,6 +63,9 @@ export class NoopTransport implements Transport {
     return undefined;
   }
   sendBootstrap(_runId: string, _status: BootstrapEventStatus, _message?: string): void {
+    return undefined;
+  }
+  sendPreflight(_runId: string, _status: PreflightEventStatus, _exists?: boolean, _message?: string): void {
     return undefined;
   }
   close(): void {
@@ -231,6 +235,21 @@ export class WebSocketTransport implements Transport {
         payload: {
           runId,
           status,
+          message,
+        },
+      }),
+    );
+  }
+
+  sendPreflight(runId: string, status: PreflightEventStatus, exists?: boolean, message?: string): void {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    this.socket.send(
+      JSON.stringify({
+        type: "preflight",
+        payload: {
+          runId,
+          status,
+          exists,
           message,
         },
       }),

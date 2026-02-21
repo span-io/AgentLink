@@ -7,6 +7,7 @@ export type ClientEnvelope = {
     | "ack"
     | "control"
     | "bootstrap"
+    | "preflight"
     | "error"
     | "ping"
     | "pong";
@@ -26,22 +27,29 @@ export type BootstrapControlPayload = {
   env?: Record<string, string>;
 };
 
+export type FileCheckControlPayload = {
+  runId?: string;
+  workingDirectory?: string;
+  filePath?: string;
+};
+
 export type ControlPayload = {
   prompt?: string;
   args?: string[];
   model?: string;
   name?: string;
-} & Partial<BootstrapControlPayload>;
+} & Partial<BootstrapControlPayload> & Partial<FileCheckControlPayload>;
 
 export type ServerControlMessage = {
   type: "control";
-  action: "spawn" | "start" | "stop" | "stdin" | "prompt" | "ping" | "bootstrap";
+  action: "spawn" | "start" | "stop" | "stdin" | "prompt" | "ping" | "bootstrap" | "check_file";
   agentId?: string;
   data?: string;
   payload?: ControlPayload;
 };
 
 export type BootstrapEventStatus = "started" | "log" | "complete" | "error";
+export type PreflightEventStatus = "complete" | "error";
 
 export type LogEntry = {
   id: number;

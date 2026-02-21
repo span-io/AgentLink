@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import os from "os";
 import process from "process";
+import path from "path";
+import { access } from "fs/promises";
+import { constants as fsConstants } from "fs";
 import { loadConfig, saveConfig } from "./config.js";
 import { findAgentsOnPath, resolveAgentBinary, type AgentProcess } from "./agent.js";
 import { spawnAgentProcess as spawnAgentProcessAdvanced, type SpawnedProcess } from "./process-runner.js";
@@ -81,6 +84,10 @@ function handleControl(message: ServerControlMessage): void {
   const { action, agentId, payload } = message;
   if (action === "bootstrap") {
     void bootstrapRunner.run(payload ?? {}, transport);
+    return;
+  }
+  if (action === "check_file") {
+    void runRemoteFileCheck(payload ?? {}, transport);
     return;
   }
   if (!agentId) return;
@@ -198,6 +205,47 @@ function handleControl(message: ServerControlMessage): void {
       }
       break;
     }
+  }
+}
+
+async function runRemoteFileCheck(
+  payload: {
+    runId?: string;
+    workingDirectory?: string;
+    filePath?: string;
+  },
+  transport: Transport,
+): Promise<void> {
+  const runId = typeof payload.runId === "string" ? payload.runId.trim() : "";
+  if (!runId) {
+    return;
+  }
+
+  const workingDirectory =
+    typeof payload.workingDirectory === "string" ? payload.workingDirectory.trim() : "";
+  if (!workingDirectory) {
+    transport.sendPreflight(runId, "error", false, "Missing workingDirectory.");
+    return;
+  }
+
+  const filePath =
+    typeof payload.filePath === "string" && payload.filePath.trim().length > 0
+      ? payload.filePath.trim()
+      : "AGENTS.md";
+
+  const baseDir = path.resolve(workingDirectory);
+  const target = path.resolve(baseDir, filePath);
+  const relative = path.relative(baseDir, target);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    transport.sendPreflight(runId, "error", false, "Invalid filePath outside working directory.");
+    return;
+  }
+
+  try {
+    await access(target, fsConstants.F_OK);
+    transport.sendPreflight(runId, "complete", true, `${filePath} exists.`);
+  } catch {
+    transport.sendPreflight(runId, "complete", false, `${filePath} not found.`);
   }
 }
 
