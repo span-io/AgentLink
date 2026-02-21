@@ -6,6 +6,7 @@ export type ClientEnvelope = {
     | "status"
     | "ack"
     | "control"
+    | "bootstrap"
     | "error"
     | "ping"
     | "pong";
@@ -18,7 +19,7 @@ export type ClientEnvelope = {
 
 export type ServerControlMessage = {
   type: "control";
-  action: "spawn" | "start" | "stop" | "stdin" | "prompt" | "ping";
+  action: "spawn" | "start" | "stop" | "stdin" | "prompt" | "ping" | "bootstrap";
   agentId?: string;
   data?: string;
   payload?: {
@@ -26,8 +27,15 @@ export type ServerControlMessage = {
     args?: string[];
     model?: string;
     name?: string;
+    runId?: string;
+    workingDirectory?: string;
+    command?: string;
+    timeoutMs?: number;
+    env?: Record<string, string>;
   };
 };
+
+export type BootstrapEventStatus = "started" | "log" | "complete" | "error";
 
 export type LogEntry = {
   id: number;

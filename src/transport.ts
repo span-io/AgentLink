@@ -1,4 +1,4 @@
-import type { LogEntry } from "./protocol.js";
+import type { BootstrapEventStatus, LogEntry } from "./protocol.js";
 import { encodeEnvelope, nowIso, type ServerControlMessage } from "./protocol.js";
 import { LogBuffer } from "./log-buffer.js";
 import os from "os";
@@ -16,6 +16,7 @@ export interface Transport {
   connect(): Promise<void>;
   sendLog(agentId: string, stream: "stdout" | "stderr", message: string): void;
   sendStatus(agentId: string, state: "running" | "exited" | "error"): void;
+  sendBootstrap(runId: string, status: BootstrapEventStatus, message?: string): void;
   close(): void;
 }
 
@@ -27,6 +28,9 @@ export class NoopTransport implements Transport {
     return undefined;
   }
   sendStatus(_agentId: string, _state: "running" | "exited" | "error"): void {
+    return undefined;
+  }
+  sendBootstrap(_runId: string, _status: BootstrapEventStatus, _message?: string): void {
     return undefined;
   }
   close(): void {
@@ -184,6 +188,20 @@ export class WebSocketTransport implements Transport {
         sessionId: agentId,
         payload: { state },
       })
+    );
+  }
+
+  sendBootstrap(runId: string, status: BootstrapEventStatus, message?: string): void {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    this.socket.send(
+      JSON.stringify({
+        type: "bootstrap",
+        payload: {
+          runId,
+          status,
+          message,
+        },
+      }),
     );
   }
 
