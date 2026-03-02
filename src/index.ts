@@ -157,6 +157,10 @@ function handleControl(message: ServerControlMessage): void {
       }
 
       const optionsArgs = [...(payload?.args || args.agentArgs)];
+      const promptMode =
+        payload?.promptMode === "stdin" || payload?.promptMode === "args"
+          ? payload.promptMode
+          : undefined;
       
       const rawPrompt = payload?.prompt || "";
       const normalized = compactPrompt(rawPrompt, promptPolicy);
@@ -174,7 +178,8 @@ function handleControl(message: ServerControlMessage): void {
         },
         prompt: normalized.prompt,
         optionsArgs,
-        executablePath: agentCandidate.path
+        executablePath: agentCandidate.path,
+        promptModeOverride: promptMode,
       });
 
       activeAgents.set(agentId, proc);

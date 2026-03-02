@@ -20,8 +20,8 @@ describe('Process Runner - buildCommand', () => {
     assert.ok(result.args.includes('exec'));
     assert.ok(result.args.includes('--model'));
     assert.ok(result.args.includes(mockAgent.model));
-    assert.ok(result.args.includes('hello world'));
-    assert.strictEqual(result.promptMode, 'args');
+    assert.ok(!result.args.includes('hello world'));
+    assert.strictEqual(result.promptMode, 'stdin');
   });
 
   it('builds command for gemini model', () => {
@@ -61,6 +61,25 @@ describe('Process Runner - buildCommand', () => {
 
     assert.ok(result.args.includes('--verbose'));
     assert.ok(result.args.includes('--custom-flag'));
+  });
+
+  it('parses quoted CODEX_ARGS values as single args', () => {
+    const previous = process.env.CODEX_ARGS;
+    process.env.CODEX_ARGS = `exec --config "reasoning effort = high"`;
+    const result = buildCommand({
+      agent: mockAgent,
+      prompt: 'hi',
+      optionsArgs: []
+    });
+
+    assert.ok(result.args.includes('--config'));
+    assert.ok(result.args.includes('reasoning effort = high'));
+
+    if (previous === undefined) {
+      delete process.env.CODEX_ARGS;
+    } else {
+      process.env.CODEX_ARGS = previous;
+    }
   });
 
   it('blocks spawn when working directory is outside allowed roots', () => {

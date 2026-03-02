@@ -14,6 +14,7 @@ export type SpawnConfig = {
   prompt: string;
   optionsArgs?: string[];
   executablePath?: string;
+  promptModeOverride?: "args" | "stdin";
 };
 
 export type SpawnedProcess = {
@@ -33,7 +34,74 @@ const DEFAULT_TTY_MODE = "auto";
 const DEFAULT_TTY_TERM = "dumb";
 
 function splitArgs(raw: string): string[] {
-  return raw.trim() === "" ? [] : raw.trim().split(/\s+/g);
+  if (raw.trim() === "") {
+    return [];
+  }
+
+  const args: string[] = [];
+  let current = "";
+  let quote: '"' | "'" | null = null;
+  let escaped = false;
+
+  for (const char of raw) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+
+    if (quote === "'") {
+      if (char === "'") {
+        quote = null;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+
+    if (quote === '"') {
+      if (char === '"') {
+        quote = null;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      current += char;
+      continue;
+    }
+
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      if (current !== "") {
+        args.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (escaped) {
+    current += "\\";
+  }
+
+  if (current !== "") {
+    args.push(current);
+  }
+
+  return args;
 }
 
 function shellQuote(value: string): string {
@@ -177,7 +245,7 @@ export function buildCommand(
 
   // Determine Prompt Mode
   const envPromptMode =
-    process.env.CODEX_PROMPT_MODE === "stdin" ? "stdin" : "args";
+    process.env.CODEX_PROMPT_MODE === "args" ? "args" : "stdin";
   const promptMode = promptModeOverride ?? envPromptMode;
 
   const extraArgs = optionsArgs.filter((arg) => arg.trim() !== "");
@@ -230,7 +298,7 @@ export function spawnAgentProcess(config: SpawnConfig): SpawnedProcess {
   const spawnWithMode = (promptModeOverride?: "args" | "stdin"): SpawnedProcess => {
     const { command, args, promptMode } = buildCommand(
       { ...config, optionsArgs: sanitizedOptions },
-      promptModeOverride,
+      promptModeOverride ?? config.promptModeOverride,
     );
 
     // Ensure requested project/working directories exist before launching CLI.
@@ -239,7 +307,7 @@ export function spawnAgentProcess(config: SpawnConfig): SpawnedProcess {
     const ttyMode = process.env.CODEX_TTY_MODE ?? DEFAULT_TTY_MODE;
     const hasExec = args.includes("exec");
     const useScriptWrapper =
-      ttyMode === "script" || (ttyMode === "auto" && hasExec);
+      promptMode === "stdin" ? false : ttyMode === "script" || (ttyMode === "auto" && hasExec);
     const ttyTerm = process.env.CODEX_TTY_TERM ?? DEFAULT_TTY_TERM;
     const defaultCwd = process.cwd(); // Client uses current working dir
     const workingDir = process.env.CODEX_CWD ?? defaultCwd;
@@ -272,7 +340,8 @@ export function spawnAgentProcess(config: SpawnConfig): SpawnedProcess {
     });
 
     if (promptMode === "stdin") {
-      child.stdin?.write(config.prompt);
+      const promptPayload = config.prompt.endsWith("\n") ? config.prompt : `${config.prompt}\n`;
+      child.stdin?.write(promptPayload);
       child.stdin?.end();
     }
 
