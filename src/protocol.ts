@@ -49,6 +49,7 @@ export type ControlPayload = {
   args?: string[];
   model?: string;
   name?: string;
+  promptMode?: "args" | "stdin";
 } & Partial<BootstrapControlPayload> & Partial<FileCheckControlPayload> & Partial<CommandControlPayload>;
 
 export type ServerControlMessage = {
