@@ -271,6 +271,7 @@ async function runRemoteCommand(payload: CommandControlPayload, transport: Trans
 function setupAgentPiping(agentId: string, proc: SpawnedProcess) {
   const rawFlushSize = Number.parseInt(process.env.AGENT_LINK_STREAM_FLUSH_CHARS ?? "16384", 10);
   const flushSize = Number.isFinite(rawFlushSize) && rawFlushSize > 0 ? rawFlushSize : 16384;
+  const echoStdio = process.env.AGENT_LINK_ECHO_STDIO === "1";
 
   const setupStream = (stream: NodeJS.ReadableStream | null, name: "stdout" | "stderr") => {
     if (!stream) return;
@@ -279,6 +280,15 @@ function setupAgentPiping(agentId: string, proc: SpawnedProcess) {
 
     const flushChunk = (chunk: string) => {
       if (chunk.length > 0) {
+        if (echoStdio) {
+          const prefix = `[agent-link][${agentId}][${name}] `;
+          const lines = chunk.split("\n");
+          for (const line of lines) {
+            if (line.length > 0) {
+              console.log(`${prefix}${line}`);
+            }
+          }
+        }
         transport.sendLog(agentId, name, chunk);
       }
     };
